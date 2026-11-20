@@ -22,6 +22,10 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="false"),
         DeclareLaunchArgument(
+            "avoidance", default_value="true",
+            description="Start the autonomous /cmd_vel publisher. Set false for manual control.",
+        ),
+        DeclareLaunchArgument(
             "world", default_value=str(simulation_dir / "worlds" / "patrol.world")
         ),
         IncludeLaunchDescription(
@@ -45,6 +49,13 @@ def generate_launch_description():
             package="gazebo_ros",
             executable="spawn_entity.py",
             arguments=["-topic", "robot_description", "-entity", "smart_car", "-z", "0.01"],
+            output="screen",
+        ),
+        Node(
+            package="smart_car_control",
+            executable="obstacle_avoidance",
+            condition=IfCondition(LaunchConfiguration("avoidance")),
+            parameters=[{"use_sim_time": True}],
             output="screen",
         ),
     ])
