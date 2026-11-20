@@ -1,0 +1,174 @@
+<?xml version="1.0"?>
+<robot name="smart_car" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="wheel_radius" value="0.075"/>
+  <xacro:property name="wheel_width" value="0.035"/>
+  <xacro:property name="wheel_mass" value="0.2"/>
+  <xacro:property name="wheel_separation" value="0.26"/>
+  <xacro:property name="body_length" value="0.34"/>
+  <xacro:property name="body_width" value="0.20"/>
+  <xacro:property name="body_height" value="0.09"/>
+  <xacro:property name="body_mass" value="2.0"/>
+  <xacro:property name="body_center_x" value="-0.04"/>
+  <xacro:property name="body_center_z" value="0.128"/>
+  <xacro:property name="skid_radius" value="0.025"/>
+  <xacro:property name="skid_mass" value="0.05"/>
+  <xacro:property name="lidar_radius" value="0.035"/>
+  <xacro:property name="lidar_height" value="0.05"/>
+  <xacro:property name="lidar_mass" value="0.06"/>
+
+  <material name="blue"><color rgba="0.10 0.35 0.78 1"/></material>
+  <material name="dark"><color rgba="0.08 0.08 0.08 1"/></material>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="${body_center_x} 0 ${body_center_z}"/>
+      <mass value="${body_mass}"/>
+      <inertia ixx="${body_mass*(body_width**2+body_height**2)/12}" ixy="0" ixz="0"
+               iyy="${body_mass*(body_length**2+body_height**2)/12}" iyz="0"
+               izz="${body_mass*(body_length**2+body_width**2)/12}"/>
+    </inertial>
+    <visual>
+      <origin xyz="${body_center_x} 0 ${body_center_z}"/>
+      <geometry><box size="${body_length} ${body_width} ${body_height}"/></geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin xyz="${body_center_x} 0 ${body_center_z}"/>
+      <geometry><box size="${body_length} ${body_width} ${body_height}"/></geometry>
+    </collision>
+  </link>
+
+  <xacro:macro name="drive_wheel" params="side y">
+    <link name="${side}_wheel">
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <inertia ixx="${wheel_mass*(3*wheel_radius**2+wheel_width**2)/12}" ixy="0" ixz="0"
+                 iyy="${wheel_mass*wheel_radius**2/2}" iyz="0"
+                 izz="${wheel_mass*(3*wheel_radius**2+wheel_width**2)/12}"/>
+      </inertial>
+      <visual>
+        <origin rpy="${pi / 2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="dark"/>
+      </visual>
+      <collision>
+        <origin rpy="${pi / 2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+    </link>
+    <joint name="${side}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_wheel"/>
+      <origin xyz="0 ${y} ${wheel_radius}"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+    <gazebo reference="${side}_wheel">
+      <material>Gazebo/Black</material>
+      <mu1>1.0</mu1>
+      <mu2>1.0</mu2>
+    </gazebo>
+  </xacro:macro>
+  <xacro:drive_wheel side="left" y="${wheel_separation/2}"/>
+  <xacro:drive_wheel side="right" y="${-wheel_separation/2}"/>
+
+  <!-- This passive low-friction contact supports the rear of the chassis. -->
+  <link name="rear_skid">
+    <inertial>
+      <mass value="${skid_mass}"/>
+      <inertia ixx="${0.4*skid_mass*skid_radius**2}" ixy="0" ixz="0"
+               iyy="${0.4*skid_mass*skid_radius**2}" iyz="0"
+               izz="${0.4*skid_mass*skid_radius**2}"/>
+    </inertial>
+    <visual>
+      <geometry><sphere radius="${skid_radius}"/></geometry>
+      <material name="dark"/>
+    </visual>
+    <collision><geometry><sphere radius="${skid_radius}"/></geometry></collision>
+  </link>
+  <joint name="rear_skid_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rear_skid"/>
+    <origin xyz="-0.175 0 ${skid_radius}"/>
+  </joint>
+
+  <link name="laser_link">
+    <inertial>
+      <mass value="${lidar_mass}"/>
+      <inertia ixx="${lidar_mass*(3*lidar_radius**2+lidar_height**2)/12}" ixy="0" ixz="0"
+               iyy="${lidar_mass*(3*lidar_radius**2+lidar_height**2)/12}" iyz="0"
+               izz="${lidar_mass*lidar_radius**2/2}"/>
+    </inertial>
+    <visual>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_height}"/></geometry>
+      <material name="dark"/>
+    </visual>
+    <collision>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_height}"/></geometry>
+    </collision>
+  </link>
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser_link"/>
+    <origin xyz="0.08 0 ${body_center_z + body_height/2 + lidar_height/2}"/>
+  </joint>
+
+  <gazebo reference="laser_link">
+    <material>Gazebo/Black</material>
+    <sensor name="smart_car_lidar" type="ray">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <!-- Include the forward ray at index 360. -->
+            <samples>721</samples>
+            <resolution>1</resolution>
+            <min_angle>${-pi}</min_angle>
+            <max_angle>${pi}</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.10</min>
+          <max>8.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin name="smart_car_laser_scan" filename="libgazebo_ros_ray_sensor.so">
+        <ros><remapping>~/out:=/scan</remapping></ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <!-- Keep the ROS frame at the sensor origin after SDF fixed-joint reduction. -->
+        <frame_name>laser_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="base_link"><material>Gazebo/Blue</material></gazebo>
+  <gazebo reference="rear_skid">
+    <mu1>0.02</mu1>
+    <mu2>0.02</mu2>
+  </gazebo>
+
+  <gazebo>
+    <plugin name="smart_car_diff_drive" filename="libgazebo_ros_diff_drive.so">
+      <update_rate>50</update_rate>
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+      <wheel_separation>${wheel_separation}</wheel_separation>
+      <wheel_diameter>${2*wheel_radius}</wheel_diameter>
+      <max_wheel_torque>5.0</max_wheel_torque>
+      <max_wheel_acceleration>2.0</max_wheel_acceleration>
+      <!-- Gazebo Classic: 0 uses wheel encoders, 1 uses the world pose. -->
+      <odometry_source>0</odometry_source>
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>false</publish_wheel_tf>
+    </plugin>
+    <plugin name="smart_car_joint_states" filename="libgazebo_ros_joint_state_publisher.so">
+      <update_rate>30</update_rate>
+      <joint_name>left_wheel_joint</joint_name>
+      <joint_name>right_wheel_joint</joint_name>
+    </plugin>
+  </gazebo>
+</robot>
